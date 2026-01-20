@@ -1,0 +1,4 @@
+{
+  "mfe-widget-a": "http://localhost:4201/remoteEntry.json",
+  "mfe-widget-b": "http://localhost:4202/remoteEntry.json"
+}

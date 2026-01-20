@@ -1,0 +1,37 @@
+<div class="dashboard-container">
+  <h2>Dashboard (Shell) - Native Federation Setup</h2>
+
+  <!-- Información sobre configuración -->
+  <div class="fractalia-shell-demo">
+    <h3>🔧 Shared Configuration</h3>
+    <div class="info-box">
+      <p>✅ <strong>JWT Interceptor:</strong> Compartido entre todos los microfrontends</p>
+      <p>✅ <strong>Fractalia Components:</strong> Configurados como dependencias compartidas</p>
+      <p>
+        📦 <strong>Federation Config:</strong> @fractalia/components y @fractalia-apps/components
+        añadidos a shared
+      </p>
+      <p>
+        🎯 <strong>Para usar Fractalia:</strong> Importar <code>FraButtonComponent</code> desde
+        '@fractalia/components'
+      </p>
+    </div>
+
+    <!-- Microfrontends Grid -->
+    <div class="microfrontends-section">
+      <h3>📦 Microfrontends (con Fractalia Components compartidos)</h3>
+      <div class="grid">
+        <app-remote-widget-host
+          remoteName="mfe-widget-a"
+          exposedModule="./Widget"
+          exportName="WidgetAComponent"
+        ></app-remote-widget-host>
+        <app-remote-widget-host
+          remoteName="mfe-widget-b"
+          exposedModule="./Widget"
+          exportName="WidgetBComponent"
+        ></app-remote-widget-host>
+      </div>
+    </div>
+  </div>
+</div>

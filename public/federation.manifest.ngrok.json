@@ -1,0 +1,4 @@
+{
+  "mfe-widget-a": "https://shell-test.ngrok.io/remoteEntry.json",
+  "mfe-widget-b": "https://widget-a-test.ngrok.io/remoteEntry.json"
+}

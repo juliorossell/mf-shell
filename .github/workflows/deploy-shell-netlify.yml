@@ -1,0 +1,104 @@
+# GitHub Actions Workflow for Shell App
+name: 🏠 Deploy Shell to Netlify
+
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'angular.json'
+      - 'federation.config.js'
+
+  # Manual trigger
+  workflow_dispatch:
+
+env:
+  NODE_VERSION: '18.x'
+  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+  NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID_SHELL }}
+
+jobs:
+  build-and-deploy:
+    name: 🚀 Build and Deploy Shell
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 📥 Checkout Code
+      uses: actions/checkout@v4
+
+    - name: 📦 Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ env.NODE_VERSION }}
+        cache: 'npm'
+
+    - name: 📚 Install Dependencies
+      run: npm ci
+
+    - name: 🔧 Update Federation Manifest
+      run: |
+        # Create production federation manifest with Netlify URLs
+        cat > src/federation.manifest.json << EOF
+        {
+          "mfe-widget-a": "https://fractalia-widget-a.netlify.app/remoteEntry.json",
+          "mfe-widget-b": "https://fractalia-widget-b.netlify.app/remoteEntry.json"
+        }
+        EOF
+        echo "✅ Federation manifest updated for production"
+
+    - name: 🏗️ Build for Production
+      run: |
+        npm run build:shell:prod
+        echo "✅ Shell built successfully"
+
+    - name: 📄 Copy Federation Manifest to Dist
+      run: |
+        cp src/federation.manifest.json dist/shell/browser/federation.manifest.json
+        echo "✅ Federation manifest copied to build output"
+
+    - name: 🚀 Deploy to Netlify
+      uses: nwtgck/actions-netlify@v2.0
+      with:
+        publish-dir: './dist/shell/browser'
+        production-branch: main
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+        deploy-message: "Deploy from GitHub Actions - ${{ github.sha }}"
+        enable-pull-request-comment: true
+        enable-commit-comment: true
+        overwrites-pull-request-comment: true
+      env:
+        NETLIFY_AUTH_TOKEN: ${{ env.NETLIFY_AUTH_TOKEN }}
+        NETLIFY_SITE_ID: ${{ env.NETLIFY_SITE_ID }}
+
+    - name: 🔍 Validate Deployment
+      run: |
+        echo "🔍 Validating shell deployment..."
+        sleep 10  # Wait for CDN propagation
+
+        # Test shell app
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://fractalia-shell.netlify.app)
+        if [ $response = "200" ]; then
+          echo "✅ Shell app is responding correctly"
+        else
+          echo "❌ Shell app returned HTTP $response"
+          exit 1
+        fi
+
+        # Test federation manifest
+        response=$(curl -s -o /dev/null -w "%{http_code}" https://fractalia-shell.netlify.app/federation.manifest.json)
+        if [ $response = "200" ]; then
+          echo "✅ Federation manifest is accessible"
+        else
+          echo "❌ Federation manifest returned HTTP $response"
+          exit 1
+        fi
+
+    - name: 💬 Notify Teams (Optional)
+      if: success() && github.ref == 'refs/heads/main'
+      run: |
+        echo "🎉 Shell deployment completed successfully!"
+        echo "🔗 URL: https://fractalia-shell.netlify.app"
+        echo "📱 Branch: ${{ github.ref_name }}"
+        echo "🔨 Commit: ${{ github.sha }}"
