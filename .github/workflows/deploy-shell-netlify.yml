@@ -34,7 +34,7 @@ jobs:
         uses: actions/setup-node@v5
         with:
           node-version: '22.12.0'
-          cache: 'npm'
+
           registry-url: 'https://registry.npmjs.org'
 
       - name: 🧪 Assert Node toolchain (hard fail if wrong)
@@ -51,6 +51,14 @@ jobs:
             exit 1
           fi
 
+      - name: 🛠️ Install build tools for native modules
+        shell: bash
+        run: |
+          echo "🛠️ Installing build essentials..."
+          sudo apt-get update
+          sudo apt-get install -y build-essential python3
+          echo "✅ Build tools installed"
+
       # ✅ Opcional: auth para npm privado (solo si realmente instalas paquetes desde registry npm privado)
       - name: 🔐 Configure npm auth (optional)
         if: env.NPM_TOKEN != ''
@@ -59,9 +67,22 @@ jobs:
           echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
           npm whoami || true
 
-      - name: 📚 Install Dependencies
+      - name: 🧹 Clean installation for native modules
         shell: bash
-        run: npm ci --legacy-peer-deps
+        run: |
+          echo "🧹 Cleaning previous installations..."
+          rm -rf node_modules package-lock.json
+          npm cache clean --force
+          echo "✅ Clean completed"
+
+      - name: 📚 Install Dependencies (fresh)
+        shell: bash
+        run: |
+          echo "📦 Installing dependencies for Linux x64..."
+          npm install --legacy-peer-deps
+          echo "🔧 Rebuilding native modules..."
+          npm rebuild
+          echo "✅ Installation completed"
 
       - name: 🔍 Show build script (debug)
         shell: bash
