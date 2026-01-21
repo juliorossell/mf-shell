@@ -11,42 +11,60 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18.17.0'
-        cache: 'npm'
+      - name: Setup Node.js (required by Angular CLI)
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22.12.0'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
 
-    - name: Setup npm token
-      run: |
-        echo "//registry.npmjs.org/:_authToken=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" > ~/.npmrc
-        echo "legacy-peer-deps=true" >> ~/.npmrc
-        echo "auto-install-peers=true" >> ~/.npmrc
+      - name: Verify Node.js
+        shell: bash
+        run: |
+          echo "node: $(node -v)"
+          echo "npm:  $(npm -v)"
+          if [[ "$(node -v)" != "v22.12.0" ]]; then
+            echo "❌ Wrong Node version. Expected v22.12.0"
+            exit 1
+          fi
 
-    - name: Install dependencies
-      run: npm install --legacy-peer-deps
+      - name: Setup npm token
+        shell: bash
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          echo "legacy-peer-deps=true" >> ~/.npmrc
+          echo "auto-install-peers=true" >> ~/.npmrc
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-    - name: Build project
-      run: npm run build:multirepo
+      - name: Install dependencies
+        shell: bash
+        run: npm ci --legacy-peer-deps
 
-    - name: Deploy to Netlify
-      uses: netlify/actions/cli@master
-      with:
-        args: deploy --prod --dir=dist/shell/browser --site=${{ secrets.NETLIFY_SITE_ID_SHELL }}
-      env:
-        NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+      - name: Build project
+        shell: bash
+        run: |
+          npx ng version
+          npm run build:multirepo
 
-    - name: Comment on PR (if PR)
-      if: github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '🚀 Shell deployed successfully to Netlify!'
-          })
+      - name: Deploy to Netlify
+        uses: netlify/actions/cli@master
+        with:
+          args: deploy --prod --dir=dist/shell/browser --site=${{ secrets.NETLIFY_SITE_ID_SHELL }}
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+
+      - name: Comment on PR (if PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: '🚀 Shell deployed successfully to Netlify!'
+            })
