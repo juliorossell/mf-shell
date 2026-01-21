@@ -73,13 +73,14 @@ jobs:
           echo "🧹 Cleaning previous installations..."
           rm -rf node_modules package-lock.json
           npm cache clean --force
-          echo "🔧 Configuring npm for native modules..."
-          npm config set target_platform linux
-          npm config set target_arch x64
           echo "✅ Clean completed"
 
       - name: 📚 Install Dependencies (fresh)
         shell: bash
+        env:
+          npm_config_platform: linux
+          npm_config_arch: x64
+          npm_config_python: python3
         run: |
           echo "📦 Installing dependencies for Linux x64..."
           npm install --legacy-peer-deps --force
