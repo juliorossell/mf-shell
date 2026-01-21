@@ -5,7 +5,7 @@ module.exports = withNativeFederation({
 
   // Expose shared services for microfrontends
   exposes: {
-    './core-layout-service': './projects/shared/core/core-layout/core-layout.service.ts'
+    './core-layout-service': './shared/core/core-layout/core-layout.service.ts'
   },
 
 
