@@ -1,118 +1,29 @@
-# GitHub Actions Workflow for Shell App
-name: 🏠 Deploy Shell to Netlify
+- name: 📦 Setup Node.js v22.12.0
+  uses: actions/setup-node@v5
+  with:
+    node-version: '22.12.0'
+    cache: 'npm'
 
-on:
-  push:
-    branches: [main, develop]
-    paths:
-      - 'src/**'
-      - 'public/**'
-      - 'package.json'
-      - 'angular.json'
-      - 'federation.config.js'
+- name: 🔍 Verify toolchain
+  shell: bash
+  run: |
+    which node
+    node -v
+    which npm
+    npm -v
+    node -p "process.execPath"
+    [[ "$(node -v)" == "v22.12.0" ]] || (echo "❌ Wrong Node" && exit 1)
 
-  workflow_dispatch:
+- name: 🔐 Configure npm auth
+  shell: bash
+  run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+  env:
+  NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-env:
-  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
-  NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID_SHELL }}
+- name: 📚 Install Dependencies
+  shell: bash
+  run: npm ci --legacy-peer-deps
 
-jobs:
-  build-and-deploy:
-    name: 🚀 Build and Deploy Shell
-    runs-on: ubuntu-24.04
-
-    steps:
-    - name: 📥 Checkout Code
-      uses: actions/checkout@v4
-
-    - name: 🗑️ Remove pre-installed Node.js
-      run: |
-        echo "Removing pre-installed Node.js..."
-        sudo apt-get remove -y nodejs npm
-        sudo apt-get autoremove -y
-        sudo rm -rf /usr/local/lib/node_modules
-        sudo rm -rf ~/.npm
-        which node && echo "Node still found" || echo "Node removed"
-
-    - name: 📦 Setup Node.js v22.12.0
-      uses: actions/setup-node@v5
-      with:
-        node-version: '22.12.0'
-        registry-url: 'https://registry.npmjs.org'
-        cache: 'npm'
-
-    - name: 🔍 Verify Node.js version
-      run: |
-        echo "✅ Node.js version: $(node --version)"
-        echo "✅ npm version: $(npm --version)"
-        if [[ "$(node --version)" != "v22.12.0" ]]; then
-          echo "❌ Wrong Node.js version!"
-          exit 1
-        fi
-
-    - name: 📚 Install Dependencies
-      run: npm ci --legacy-peer-deps
-
-    - name: 🔧 Update Federation Manifest
-      run: |
-        cat > src/federation.manifest.json << EOF
-        {
-          "mfe-widget-a": "https://fractalia-widget-a.netlify.app/remoteEntry.json",
-          "mfe-widget-b": "https://fractalia-widget-b.netlify.app/remoteEntry.json"
-        }
-        EOF
-        echo "✅ Federation manifest updated for production"
-
-    - name: 🏗️ Build for Production
-      run: |
-        npm run build:multirepo
-        echo "✅ Shell built successfully"
-
-    - name: 📄 Copy Federation Manifest to Dist
-      run: |
-        cp src/federation.manifest.json dist/shell/browser/federation.manifest.json
-        echo "✅ Federation manifest copied to build output"
-
-    - name: 🚀 Deploy to Netlify
-      uses: nwtgck/actions-netlify@v2.0
-      with:
-        publish-dir: './dist/shell/browser'
-        production-branch: main
-        github-token: ${{ secrets.GITHUB_TOKEN }}
-        deploy-message: "Deploy from GitHub Actions - ${{ github.sha }}"
-        enable-pull-request-comment: true
-        enable-commit-comment: true
-        overwrites-pull-request-comment: true
-      env:
-        NETLIFY_AUTH_TOKEN: ${{ env.NETLIFY_AUTH_TOKEN }}
-        NETLIFY_SITE_ID: ${{ env.NETLIFY_SITE_ID }}
-
-    - name: 🔍 Validate Deployment
-      run: |
-        echo "🔍 Validating shell deployment..."
-        sleep 10
-
-        response=$(curl -s -o /dev/null -w "%{http_code}" https://fractalia-shell.netlify.app)
-        if [ $response = "200" ]; then
-          echo "✅ Shell app is responding correctly"
-        else
-          echo "❌ Shell app returned HTTP $response"
-          exit 1
-        fi
-
-        response=$(curl -s -o /dev/null -w "%{http_code}" https://fractalia-shell.netlify.app/federation.manifest.json)
-        if [ $response = "200" ]; then
-          echo "✅ Federation manifest is accessible"
-        else
-          echo "❌ Federation manifest returned HTTP $response"
-          exit 1
-        fi
-
-    - name: 💬 Notify Teams
-      if: success() && github.ref == 'refs/heads/main'
-      run: |
-        echo "🎉 Shell deployment completed successfully!"
-        echo "🔗 URL: https://fractalia-shell.netlify.app"
-        echo "📱 Branch: ${{ github.ref_name }}"
-        echo "🔨 Commit: ${{ github.sha }}"
+- name: 🏗️ Build for Production
+  shell: bash
+  run: npm run build:multirepo
