@@ -1,6 +1,6 @@
 [build]
   command = "npm run build:multirepo"
-  publish = "dist/browser"
+  publish = "dist/shell/browser"
 
 [build.environment]
   NODE_VERSION = "18.17.0"
