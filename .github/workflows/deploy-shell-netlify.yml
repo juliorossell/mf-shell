@@ -51,7 +51,7 @@ jobs:
 
     - name: 🏗️ Build for Production
       run: |
-        npm run build:shell:prod
+        npm run build:multirepo
         echo "✅ Shell built successfully"
 
     - name: 📄 Copy Federation Manifest to Dist
