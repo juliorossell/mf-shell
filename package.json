@@ -6,7 +6,7 @@
     "start": "ng serve",
     "build": "ng build",
     "build:prod": "ng build --configuration=production",
-    "build:multirepo": "ng build --configuration=production --base-href=/ && copy \"public\\federation.manifest.multirepo.json\" \"dist\\shell\\browser\\federation.manifest.json\"",
+    "build:multirepo": "ng build --configuration=production --base-href=/ && npx --yes shx cp public/federation.manifest.multirepo.json dist/shell/browser/federation.manifest.json",
     "watch": "ng build --watch --configuration development",
     "test": "ng test",
     "serve": "ng serve --port 4200",

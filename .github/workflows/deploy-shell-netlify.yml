@@ -1,29 +1,133 @@
-- name: 📦 Setup Node.js v22.12.0
-  uses: actions/setup-node@v5
-  with:
-    node-version: '22.12.0'
-    cache: 'npm'
+# GitHub Actions Workflow for Shell App
+name: 🏠 Deploy Shell to Netlify
 
-- name: 🔍 Verify toolchain
-  shell: bash
-  run: |
-    which node
-    node -v
-    which npm
-    npm -v
-    node -p "process.execPath"
-    [[ "$(node -v)" == "v22.12.0" ]] || (echo "❌ Wrong Node" && exit 1)
+on:
+  push:
+    branches: [main, develop]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'angular.json'
+      - 'federation.config.js'
+      - '.github/workflows/deploy-shell-netlify.yml'
 
-- name: 🔐 Configure npm auth
-  shell: bash
-  run: echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
-  env:
+  workflow_dispatch:
+
+env:
+  NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+  NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID_SHELL }}
+  # Si usas npm privado, agrega NPM_TOKEN en secrets (opcional)
   NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-- name: 📚 Install Dependencies
-  shell: bash
-  run: npm ci --legacy-peer-deps
+jobs:
+  build-and-deploy:
+    name: 🚀 Build and Deploy Shell
+    runs-on: ubuntu-24.04
 
-- name: 🏗️ Build for Production
-  shell: bash
-  run: npm run build:multirepo
+    steps:
+      - name: 📥 Checkout Code
+        uses: actions/checkout@v4
+
+      - name: 📦 Setup Node.js v22.12.0
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22.12.0'
+          cache: 'npm'
+          registry-url: 'https://registry.npmjs.org'
+
+      - name: 🧪 Assert Node toolchain (hard fail if wrong)
+        shell: bash
+        run: |
+          echo "PATH=$PATH"
+          echo "node: $(which node)"
+          echo "npm:  $(which npm)"
+          node -v
+          npm -v
+          node -p "process.execPath"
+          if [[ "$(node -v)" != "v22.12.0" ]]; then
+            echo "❌ Node is not v22.12.0. Failing."
+            exit 1
+          fi
+
+      # ✅ Opcional: auth para npm privado (solo si realmente instalas paquetes desde registry npm privado)
+      - name: 🔐 Configure npm auth (optional)
+        if: env.NPM_TOKEN != ''
+        shell: bash
+        run: |
+          echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > ~/.npmrc
+          npm whoami || true
+
+      - name: 📚 Install Dependencies
+        shell: bash
+        run: npm ci --legacy-peer-deps
+
+      - name: 🔍 Show build script (debug)
+        shell: bash
+        run: node -p "require('./package.json').scripts['build:multirepo']"
+
+      - name: 🔧 Update Federation Manifest (production endpoints)
+        shell: bash
+        run: |
+          cat > src/federation.manifest.json << 'EOF'
+          {
+            "mfe-widget-a": "https://fractalia-widget-a.netlify.app/remoteEntry.json",
+            "mfe-widget-b": "https://fractalia-widget-b.netlify.app/remoteEntry.json"
+          }
+          EOF
+          echo "✅ Federation manifest updated for production"
+
+      # 🔥 Importante: usamos npx ng para evitar cualquier ng global raro
+      - name: 🏗️ Build for Production
+        shell: bash
+        run: |
+          node -v
+          npx ng version
+          npm run build:multirepo
+          echo "✅ Shell built successfully"
+
+      - name: 🚀 Deploy to Netlify
+        uses: nwtgck/actions-netlify@v2.0
+        with:
+          publish-dir: './dist/shell/browser'
+          production-branch: main
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          deploy-message: "Deploy from GitHub Actions - ${{ github.sha }}"
+          enable-pull-request-comment: true
+          enable-commit-comment: true
+          overwrites-pull-request-comment: true
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ env.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ env.NETLIFY_SITE_ID }}
+
+      - name: 🔍 Validate Deployment
+        shell: bash
+        run: |
+          echo "🔍 Validating shell deployment..."
+          sleep 10
+
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://fractalia-shell.netlify.app)
+          if [ "$response" = "200" ]; then
+            echo "✅ Shell app is responding correctly"
+          else
+            echo "❌ Shell app returned HTTP $response"
+            exit 1
+          fi
+
+          response=$(curl -s -o /dev/null -w "%{http_code}" https://fractalia-shell.netlify.app/federation.manifest.json)
+          if [ "$response" = "200" ]; then
+            echo "✅ Federation manifest is accessible"
+          else
+            echo "❌ Federation manifest returned HTTP $response"
+            exit 1
+          fi
+
+      - name: 💬 Notify Teams
+        if: success() && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          echo "🎉 Shell deployment completed successfully!"
+          echo "🔗 URL: https://fractalia-shell.netlify.app"
+          echo "📱 Branch: ${{ github.ref_name }}"
+          echo "🔨 Commit: ${{ github.sha }}"
