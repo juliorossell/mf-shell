@@ -92,17 +92,6 @@ jobs:
         shell: bash
         run: node -p "require('./package.json').scripts['build:multirepo']"
 
-      - name: 🔧 Update Federation Manifest (production endpoints)
-        shell: bash
-        run: |
-          cat > src/federation.manifest.json << 'EOF'
-          {
-            "mfe-widget-a": "https://fractalia-widget-a.netlify.app/remoteEntry.json",
-            "mfe-widget-b": "https://fractalia-widget-b.netlify.app/remoteEntry.json"
-          }
-          EOF
-          echo "✅ Federation manifest updated for production"
-
       # 🔥 Importante: usamos npx ng para evitar cualquier ng global raro
       - name: 🏗️ Build for Production
         shell: bash
@@ -112,7 +101,19 @@ jobs:
           npm run build:multirepo
           echo "✅ Shell built successfully"
 
+      - name: 🔧 Update Federation Manifest (production endpoints)
+        shell: bash
+        run: |
+          cat > dist/shell/browser/federation.manifest.json << 'EOF'
+          {
+            "mfe-widget-a": "https://fractalia-widget-a.netlify.app/remoteEntry.json",
+            "mfe-widget-b": "https://fractalia-widget-b.netlify.app/remoteEntry.json"
+          }
+          EOF
+          echo "✅ Federation manifest updated for production and placed in build output"
+
       - name: 🚀 Deploy to Netlify
+        id: netlify-deploy
         uses: nwtgck/actions-netlify@v2.0
         with:
           publish-dir: './dist/shell/browser'
@@ -130,29 +131,51 @@ jobs:
         shell: bash
         run: |
           echo "🔍 Validating shell deployment..."
-          sleep 10
+          echo "⏳ Waiting for deployment to be ready..."
+          sleep 30
 
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://fractalia-shell.netlify.app)
-          if [ "$response" = "200" ]; then
-            echo "✅ Shell app is responding correctly"
-          else
-            echo "❌ Shell app returned HTTP $response"
+          # Get the deployed URL from Netlify output or use default
+          DEPLOY_URL="${{ steps.netlify-deploy.outputs.deploy-url || 'https://fractalia-shell.netlify.app' }}"
+          echo "🔗 Testing deployment at: $DEPLOY_URL"
+
+          # Check if site is accessible
+          max_retries=5
+          retry_count=0
+
+          while [ $retry_count -lt $max_retries ]; do
+            response=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOY_URL" || echo "000")
+
+            if [ "$response" = "200" ]; then
+              echo "✅ Shell app is responding correctly"
+              break
+            else
+              echo "⏳ Attempt $((retry_count + 1))/$max_retries: Shell app returned HTTP $response, retrying in 15s..."
+              sleep 15
+              retry_count=$((retry_count + 1))
+            fi
+          done
+
+          if [ $retry_count -eq $max_retries ]; then
+            echo "❌ Shell app failed to respond after $max_retries attempts"
+            echo "🔍 Let's check what's actually deployed..."
+            curl -v "$DEPLOY_URL" 2>&1 || true
+            echo "🔍 Checking if this is a subdomain issue..."
+            curl -s -o /dev/null -w "%{http_code}" https://app.netlify.com/sites/fractalia-shell || true
             exit 1
           fi
 
-          response=$(curl -s -o /dev/null -w "%{http_code}" https://fractalia-shell.netlify.app/federation.manifest.json)
+          # Validate federation manifest
+          response=$(curl -s -o /dev/null -w "%{http_code}" "$DEPLOY_URL/federation.manifest.json")
           if [ "$response" = "200" ]; then
             echo "✅ Federation manifest is accessible"
+            # Show manifest content for verification
+            echo "🔍 Manifest content:"
+            curl -s "$DEPLOY_URL/federation.manifest.json"
           else
             echo "❌ Federation manifest returned HTTP $response"
+            echo "🔍 Checking build directory structure..."
+            ls -la dist/shell/browser/ || true
             exit 1
-          fi
-
-      - name: 💬 Notify Teams
-        if: success() && github.ref == 'refs/heads/main'
-        shell: bash
-        run: |
-          echo "🎉 Shell deployment completed successfully!"
           echo "🔗 URL: https://fractalia-shell.netlify.app"
           echo "📱 Branch: ${{ github.ref_name }}"
           echo "🔨 Commit: ${{ github.sha }}"
