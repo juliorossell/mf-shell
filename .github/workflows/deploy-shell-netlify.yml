@@ -176,6 +176,13 @@ jobs:
             echo "🔍 Checking build directory structure..."
             ls -la dist/shell/browser/ || true
             exit 1
+          fi
+
+      - name: 💬 Notify Teams
+        if: success() && github.ref == 'refs/heads/main'
+        shell: bash
+        run: |
+          echo "🎉 Shell deployment completed successfully!"
           echo "🔗 URL: https://fractalia-shell.netlify.app"
           echo "📱 Branch: ${{ github.ref_name }}"
           echo "🔨 Commit: ${{ github.sha }}"
